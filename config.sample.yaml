@@ -29,3 +29,4 @@ scanner:
   concurrent_jobs: 3 # Number of concurrent processing jobs
   database_path: 'queue.db' # SQLite database file for persistent queue
   reprocess_interval: '7d' # Reprocess items after 7 days (set to "0" to disable)
+  failed_directory: '/path/to/failed/nzbs' # Directory where failed NZBs are moved to (preserves folder structure)

@@ -27,15 +27,18 @@ type Config struct {
 	DownloadProviders []nntppool.UsenetProviderConfig `yaml:"download_providers"`
 
 	// Scanner configuration
-	Scanner struct {
-		Enabled           bool     `yaml:"enabled"`
-		WatchDirectories  []string `yaml:"watch_directories"`
-		ScanInterval      string   `yaml:"scan_interval"` // duration string like "5m", "1h"
-		MaxFilesPerDay    int      `yaml:"max_files_per_day"`
-		ConcurrentJobs    int      `yaml:"concurrent_jobs"`
-		DatabasePath      string   `yaml:"database_path"`      // Path to SQLite database file
-		ReprocessInterval string   `yaml:"reprocess_interval"` // Duration after which to reprocess an item ("0" to disable)
-	} `yaml:"scanner"`
+	Scanner Scanner `yaml:"scanner"`
+}
+
+type Scanner struct {
+	Enabled           bool          `yaml:"enabled"`
+	WatchDirectories  []string      `yaml:"watch_directories"`
+	ScanInterval      time.Duration `yaml:"scan_interval"` // duration string like "5m", "1h"
+	MaxFilesPerDay    int           `yaml:"max_files_per_day"`
+	ConcurrentJobs    int           `yaml:"concurrent_jobs"`
+	DatabasePath      string        `yaml:"database_path"`      // Path to SQLite database file
+	ReprocessInterval time.Duration `yaml:"reprocess_interval"` // Duration after which to reprocess an item ("0" to disable)
+	FailedDirectory   string        `yaml:"failed_directory"`   // Directory where failed NZBs are moved to
 }
 
 type Option func(*Config)
@@ -46,20 +49,14 @@ var (
 		MaxConnectionIdleTimeInSeconds: 2400,
 	}
 	downloadWorkersDefault = 10
-	scannerDefault         = struct {
-		Enabled           bool
-		ScanInterval      string
-		MaxFilesPerDay    int
-		ConcurrentJobs    int
-		DatabasePath      string
-		ReprocessInterval string
-	}{
+	scannerDefault         = Scanner{
 		Enabled:           false,
-		ScanInterval:      "30m",      // Default: 30 minutes
-		MaxFilesPerDay:    50,         // Default: 50 files per day
-		ConcurrentJobs:    1,          // Default: 1 concurrent job
-		DatabasePath:      "queue.db", // Default database path
-		ReprocessInterval: "0",        // Default: don't reprocess (0 = disabled)
+		ScanInterval:      30 * time.Minute, // Default: 30 minutes
+		MaxFilesPerDay:    50,               // Default: 50 files per day
+		ConcurrentJobs:    1,                // Default: 1 concurrent job
+		DatabasePath:      "queue.db",       // Default database path
+		ReprocessInterval: 0,                // Default: don't reprocess (0 = disabled)
+		FailedDirectory:   "",               // Default: no failed directory
 	}
 )
 
@@ -68,21 +65,14 @@ func mergeWithDefault(config ...Config) Config {
 		return Config{
 			DownloadProviders: []nntppool.UsenetProviderConfig{},
 			DownloadWorkers:   downloadWorkersDefault,
-			Scanner: struct {
-				Enabled           bool     `yaml:"enabled"`
-				WatchDirectories  []string `yaml:"watch_directories"`
-				ScanInterval      string   `yaml:"scan_interval"`
-				MaxFilesPerDay    int      `yaml:"max_files_per_day"`
-				ConcurrentJobs    int      `yaml:"concurrent_jobs"`
-				DatabasePath      string   `yaml:"database_path"`
-				ReprocessInterval string   `yaml:"reprocess_interval"`
-			}{
+			Scanner: Scanner{
 				Enabled:           scannerDefault.Enabled,
 				ScanInterval:      scannerDefault.ScanInterval,
 				MaxFilesPerDay:    scannerDefault.MaxFilesPerDay,
 				ConcurrentJobs:    scannerDefault.ConcurrentJobs,
 				DatabasePath:      scannerDefault.DatabasePath,
 				ReprocessInterval: scannerDefault.ReprocessInterval,
+				FailedDirectory:   scannerDefault.FailedDirectory,
 			},
 		}
 	}
@@ -108,7 +98,7 @@ func mergeWithDefault(config ...Config) Config {
 	}
 
 	// Apply scanner defaults if not set
-	if cfg.Scanner.ScanInterval == "" {
+	if cfg.Scanner.ScanInterval == 0 {
 		cfg.Scanner.ScanInterval = scannerDefault.ScanInterval
 	}
 
@@ -124,7 +114,7 @@ func mergeWithDefault(config ...Config) Config {
 		cfg.Scanner.DatabasePath = scannerDefault.DatabasePath
 	}
 
-	if cfg.Scanner.ReprocessInterval == "" {
+	if cfg.Scanner.ReprocessInterval == 0 {
 		cfg.Scanner.ReprocessInterval = scannerDefault.ReprocessInterval
 	}
 
@@ -147,10 +137,10 @@ func NewFromFile(path string) (Config, error) {
 
 // GetScanInterval returns the scan interval duration
 func (c *Config) GetScanInterval() (time.Duration, error) {
-	return time.ParseDuration(c.Scanner.ScanInterval)
+	return c.Scanner.ScanInterval, nil
 }
 
 // GetReprocessInterval returns the reprocess interval duration
 func (c *Config) GetReprocessInterval() (time.Duration, error) {
-	return time.ParseDuration(c.Scanner.ReprocessInterval)
+	return c.Scanner.ReprocessInterval, nil
 }

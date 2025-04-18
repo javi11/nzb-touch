@@ -62,11 +62,11 @@ scanner:
 
 - `enabled` - Enable or disable the scanner
 - `watch_directories` - List of directories to scan for NZB files
-- `scan_interval` - How often to scan directories (e.g., "5m", "1h", "30s")
+- `scan_interval` - How often to scan directories (e.g., "5m", "1h", "30s"). Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 - `max_files_per_day` - Maximum number of files to process per day
 - `concurrent_jobs` - Number of concurrent processing jobs
 - `database_path` - Path to SQLite database file for persistent queue storage (default: "queue.db")
-- `reprocess_interval` - Duration after which to reprocess previously processed files (default: "0" = disabled)
+- `reprocess_interval` - Duration after which to reprocess previously processed files (default: "0" = disabled). Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
 ## Building
 
@@ -76,32 +76,10 @@ go build -o nzbtouch ./cmd/nzbtouch
 
 ## Features
 
-- Parses NZB files using the `github.com/Tensai75/nzbparser` library
-- Downloads articles using the `github.com/javi11/nntppool` library for NNTP connectivity
-- Multiple concurrent downloads with connection pooling
-- Real-time progress display with download speed
-- Command-line interface using Cobra
-- YAML configuration for server connection details
-
-## Project Structure
-
-The project follows Go best practices with a clean architecture:
-
-```
-nzb-touch/
-├── cmd/
-│   └── nzbtouch/           # Command-line executable
-│       ├── main.go
-│       └── nzb-touch.go    # Cobra command definition
-├── internal/
-│   ├── nntp/               # NNTP client functionality
-│   ├── nzbparser/          # NZB file parsing
-│   ├── processor/          # Download processing logic
-│   └── statistics/         # Download statistics tracking
-├── config.example.yml      # Example configuration file
-├── go.mod                  # Go module file
-└── README.md
-```
+- Download the articles in memory and discard
+- Scan mode to scan a directory
+- Schedule scan with max number of files to download peer day
+- Move the broken files into another directory
 
 ## Installation
 

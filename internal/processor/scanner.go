@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/javi11/nzb-touch/internal/nzb"
+	"github.com/opencontainers/selinux/pkg/pwalkdir"
 )
 
 // DirectoryScanner handles scanning directories for NZB files
@@ -19,6 +21,7 @@ type DirectoryScanner struct {
 	interval          time.Duration
 	maxFilesPerDay    int
 	reprocessInterval time.Duration
+	failedDirectory   string
 	processingQueue   chan string
 	stopChan          chan struct{}
 }
@@ -32,6 +35,7 @@ func NewDirectoryScanner(
 	concurrentProcessing int,
 	dbPath string,
 	reprocessInterval time.Duration,
+	failedDirectory string,
 ) (*DirectoryScanner, error) {
 	if concurrentProcessing <= 0 {
 		concurrentProcessing = 1
@@ -50,6 +54,7 @@ func NewDirectoryScanner(
 		interval:          interval,
 		maxFilesPerDay:    maxFilesPerDay,
 		reprocessInterval: reprocessInterval,
+		failedDirectory:   failedDirectory,
 		processingQueue:   make(chan string, concurrentProcessing),
 		stopChan:          make(chan struct{}),
 	}, nil
@@ -95,7 +100,7 @@ func (s *DirectoryScanner) scanDirectories(ctx context.Context) {
 
 	// Scan watched directories for new files
 	for _, dir := range s.watchDirs {
-		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		err := pwalkdir.Walk(dir, func(path string, info fs.DirEntry, err error) error {
 			// Check for errors or context cancellation
 			if err != nil {
 				return err
@@ -155,6 +160,8 @@ func (s *DirectoryScanner) scanDirectories(ctx context.Context) {
 	if pruned > 0 {
 		slog.InfoContext(ctx, "Pruned old items from queue", "count", pruned)
 	}
+
+	slog.InfoContext(ctx, "Directory scan completed")
 }
 
 // checkForReprocessItems checks for items that need to be reprocessed
@@ -203,6 +210,8 @@ func (s *DirectoryScanner) checkForReprocessItems(ctx context.Context) {
 			return
 		}
 	}
+
+	slog.InfoContext(ctx, "All items queued for reprocessing")
 }
 
 // processFiles is a worker that processes files from the queue
@@ -220,6 +229,16 @@ func (s *DirectoryScanner) processFiles(ctx context.Context) {
 			err := s.processFile(ctx, filePath)
 			if err != nil {
 				slog.ErrorContext(ctx, "Error processing file", "path", filePath, "error", err)
+
+				// Move the failed file to the failed directory if configured
+				if s.failedDirectory != "" {
+					if moveErr := s.moveToFailedDirectory(filePath); moveErr != nil {
+						slog.ErrorContext(ctx, "Failed to move file to failed directory",
+							"path", filePath,
+							"target_dir", s.failedDirectory,
+							"error", moveErr)
+					}
+				}
 			}
 
 			// Mark as processed regardless of success
@@ -232,6 +251,95 @@ func (s *DirectoryScanner) processFiles(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// moveToFailedDirectory moves a failed NZB file to the configured failed directory
+// preserving the original directory structure
+func (s *DirectoryScanner) moveToFailedDirectory(filePath string) error {
+	// If failed directory not configured, just return
+	if s.failedDirectory == "" {
+		return nil
+	}
+
+	// Create the failed directory if it doesn't exist
+	if err := os.MkdirAll(s.failedDirectory, 0755); err != nil {
+		return err
+	}
+
+	// Find the base watch directory containing this file
+	var basePath string
+	for _, watchDir := range s.watchDirs {
+		absWatchDir, err := filepath.Abs(watchDir)
+		if err != nil {
+			continue
+		}
+
+		absFilePath, err := filepath.Abs(filePath)
+		if err != nil {
+			continue
+		}
+
+		if strings.HasPrefix(absFilePath, absWatchDir) {
+			basePath = absWatchDir
+			break
+		}
+	}
+
+	// If we couldn't find a matching watch directory, just use the file name
+	var targetPath string
+	if basePath != "" {
+		// Get the relative path from the watch directory
+		absFilePath, _ := filepath.Abs(filePath)
+		relPath, err := filepath.Rel(basePath, absFilePath)
+		if err != nil {
+			// Fall back to just the file name if we can't get the relative path
+			relPath = filepath.Base(filePath)
+		}
+
+		// Create the target path with the relative structure
+		targetPath = filepath.Join(s.failedDirectory, relPath)
+	} else {
+		// Just use the file name
+		targetPath = filepath.Join(s.failedDirectory, filepath.Base(filePath))
+	}
+
+	// Create parent directories if needed
+	targetDir := filepath.Dir(targetPath)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return err
+	}
+
+	// Move the file
+	if err := os.Rename(filePath, targetPath); err != nil {
+		// If rename fails (e.g., across different filesystems), try copy and delete
+		if err := copyFile(filePath, targetPath); err != nil {
+			return err
+		}
+
+		// Delete original after successful copy
+		return os.Remove(filePath)
+	}
+
+	slog.Info("Moved failed NZB file", "from", filePath, "to", targetPath)
+	return nil
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = destFile.ReadFrom(sourceFile)
+	return err
 }
 
 // processFile processes a single NZB file

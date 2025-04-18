@@ -80,6 +80,7 @@ The scanner will run at the configured interval and respect daily limits.`,
 			cfg.Scanner.ConcurrentJobs,
 			cfg.Scanner.DatabasePath,
 			reprocessInterval,
+			cfg.Scanner.FailedDirectory,
 		)
 		if err != nil {
 			slog.Error("Failed to create directory scanner", "error", err)
@@ -105,6 +106,7 @@ The scanner will run at the configured interval and respect daily limits.`,
 			"max_files_per_day", cfg.Scanner.MaxFilesPerDay,
 			"watch_dirs", cfg.Scanner.WatchDirectories,
 			"reprocess_interval", reprocessInterval,
+			"failed_directory", cfg.Scanner.FailedDirectory,
 		)
 
 		err = scanner.Start(ctx)

@@ -14,6 +14,16 @@ import (
 	"github.com/sourcegraph/conc/pool"
 )
 
+// SegmentError represents a download error for a specific segment
+type SegmentError struct {
+	SegmentID string
+	Err       error
+}
+
+func (e *SegmentError) Error() string {
+	return fmt.Sprintf("error downloading segment %s: %v", e.SegmentID, e.Err)
+}
+
 // Processor handles the downloading of NZB files
 type Processor struct {
 	nntpClient  nntppool.UsenetConnectionPool
@@ -33,12 +43,22 @@ func New(nntpClient nntppool.UsenetConnectionPool, totalSegments int, concurrenc
 }
 
 // ProcessNZB downloads all articles in the NZB file
-func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb) error {
+func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb) (err error) {
 	// Create a new worker pool with the configured concurrency
-	workerPool := pool.New().WithMaxGoroutines(p.concurrency).WithContext(ctx)
+	workerPool := pool.New().WithMaxGoroutines(p.concurrency).WithContext(ctx).WithCancelOnError()
+	defer func() {
+		err = workerPool.Wait()
+	}()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// Process each file
 	for _, file := range nzb.Files {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		slog.InfoContext(ctx, fmt.Sprintf("Checking file %s", file.Filename))
 
 		bar := progressbar.NewOptions(int(file.Bytes),
@@ -70,8 +90,19 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb) error {
 						return nil
 					}
 
-					fmt.Printf("Error downloading segment %s: %v\n", seg.Id, err)
-					return nil // We don't want to stop the entire process on segment failures
+					// Log the error
+					slog.ErrorContext(ctx, "Error downloading segment",
+						"segment", seg.Id,
+						"file", fileInfo.Filename,
+						"error", err)
+
+					cancel()
+
+					// Store the first error we encounter
+					return &SegmentError{
+						SegmentID: seg.Id,
+						Err:       err,
+					}
 				}
 
 				// Update statistics
@@ -84,8 +115,6 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb) error {
 		_ = bar.Finish()
 	}
 
-	// Wait for all downloads to complete
-	err := workerPool.Wait()
-
-	return err
+	// Return the first error that occurred, if any
+	return nil
 }
