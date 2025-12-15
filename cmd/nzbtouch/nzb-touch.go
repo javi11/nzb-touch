@@ -41,14 +41,14 @@ validate NZB files without storing the downloaded content.`,
 		cfg, err := config.NewFromFile(configFile)
 		if err != nil {
 			slog.Error("Failed to load config", "error", err)
-			os.Exit(1)
+			os.Exit(2)
 		}
 
 		// Load and parse NZB file
 		nzbData, err := nzb.LoadFromFile(nzbFile)
 		if err != nil {
 			slog.Error("Failed to load NZB file", "error", err)
-			os.Exit(1)
+			os.Exit(3)
 		}
 
 		// Display NZB information
@@ -60,7 +60,7 @@ validate NZB files without storing the downloaded content.`,
 		)
 		if err != nil {
 			slog.Error("Error creating connection pool", "error", err)
-			os.Exit(1)
+			os.Exit(4)
 		}
 		defer pool.Quit()
 
@@ -71,7 +71,7 @@ validate NZB files without storing the downloaded content.`,
 		ctx := context.Background()
 		if err := proc.ProcessNZB(ctx, nzbData.Nzb); err != nil {
 			slog.Error("Error processing NZB", "error", err)
-			os.Exit(1)
+			os.Exit(5)
 		}
 	},
 }
