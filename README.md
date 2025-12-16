@@ -81,6 +81,17 @@ go build -o nzbtouch ./cmd/nzbtouch
 - Schedule scan with max number of files to download peer day
 - Move the broken files into another directory
 
+## Exit Codes
+
+The application uses different exit codes to indicate specific error conditions:
+
+- `0` - Success
+- `1` - Missing required arguments (NZB file or config file)
+- `2` - Failed to load configuration file
+- `3` - Failed to load or parse NZB file
+- `4` - Failed to create NNTP connection pool
+- `5` - Error processing NZB (download errors, missing segments, etc.)
+
 ## Installation
 
 ### Prerequisites
