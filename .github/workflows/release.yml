@@ -27,7 +27,7 @@ jobs:
         with:
           os: ${{ matrix.os }}
   build-artifacts:
-    runs-on: macos-13
+    runs-on: macos-latest
     needs: test
     permissions:
       contents: write
