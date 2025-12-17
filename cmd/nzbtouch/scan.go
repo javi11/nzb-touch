@@ -44,6 +44,12 @@ The scanner will run at the configured interval and respect daily limits.`,
 			os.Exit(1)
 		}
 
+		// Validate check percent
+		if cfg.Scanner.CheckPercent <= 0 || cfg.Scanner.CheckPercent > 100 {
+			slog.Error("Error: checkpercent must be between 1 and 100")
+			os.Exit(1)
+		}
+
 		// Parse scan interval
 		scanInterval, err := cfg.GetScanInterval()
 		if err != nil {
@@ -81,6 +87,7 @@ The scanner will run at the configured interval and respect daily limits.`,
 			cfg.Scanner.DatabasePath,
 			reprocessInterval,
 			cfg.Scanner.FailedDirectory,
+			cfg.Scanner.CheckPercent,
 		)
 		if err != nil {
 			slog.Error("Failed to create directory scanner", "error", err)

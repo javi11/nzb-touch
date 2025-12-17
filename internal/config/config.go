@@ -39,6 +39,7 @@ type Scanner struct {
 	DatabasePath      string        `yaml:"database_path"`      // Path to SQLite database file
 	ReprocessInterval time.Duration `yaml:"reprocess_interval"` // Duration after which to reprocess an item ("0" to disable)
 	FailedDirectory   string        `yaml:"failed_directory"`   // Directory where failed NZBs are moved to
+	CheckPercent      int           `yaml:"check_percent"`      // Percentage of NZB to download for checking (1-100, default: 100)
 }
 
 type Option func(*Config)
@@ -57,6 +58,7 @@ var (
 		DatabasePath:      "queue.db",       // Default database path
 		ReprocessInterval: 0,                // Default: don't reprocess (0 = disabled)
 		FailedDirectory:   "",               // Default: no failed directory
+		CheckPercent:      100,              // Default: check 100% of the file
 	}
 )
 
@@ -73,6 +75,7 @@ func mergeWithDefault(config ...Config) Config {
 				DatabasePath:      scannerDefault.DatabasePath,
 				ReprocessInterval: scannerDefault.ReprocessInterval,
 				FailedDirectory:   scannerDefault.FailedDirectory,
+				CheckPercent:      scannerDefault.CheckPercent,
 			},
 		}
 	}
@@ -116,6 +119,10 @@ func mergeWithDefault(config ...Config) Config {
 
 	if cfg.Scanner.ReprocessInterval == 0 {
 		cfg.Scanner.ReprocessInterval = scannerDefault.ReprocessInterval
+	}
+
+	if cfg.Scanner.CheckPercent == 0 {
+		cfg.Scanner.CheckPercent = scannerDefault.CheckPercent
 	}
 
 	return cfg

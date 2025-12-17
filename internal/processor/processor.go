@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand"
 
 	"github.com/Tensai75/nzbparser"
 	"github.com/javi11/nntppool"
@@ -43,7 +44,7 @@ func New(nntpClient nntppool.UsenetConnectionPool, totalSegments int, concurrenc
 }
 
 // ProcessNZB downloads all articles in the NZB file
-func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb) (err error) {
+func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb, checkPercent int) (err error) {
 	// Create a new worker pool with the configured concurrency
 	workerPool := pool.New().WithMaxGoroutines(p.concurrency).WithContext(ctx).WithCancelOnError()
 	defer func() {
@@ -61,6 +62,33 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb) (err err
 
 		slog.InfoContext(ctx, fmt.Sprintf("Checking file %s", file.Filename))
 
+		// Determine which segments to check based on checkPercent
+		totalSegments := len(file.Segments)
+		segmentsToCheck := totalSegments
+		if checkPercent < 100 {
+			segmentsToCheck = (totalSegments * checkPercent) / 100
+			if segmentsToCheck == 0 {
+				segmentsToCheck = 1 // Always check at least one segment
+			}
+		}
+
+		// Select random segment indices without duplicates
+		selectedIndices := make(map[int]bool)
+		if segmentsToCheck < totalSegments {
+			// Generate random indices without duplicates
+			for len(selectedIndices) < segmentsToCheck {
+				idx := rand.Intn(totalSegments)
+				selectedIndices[idx] = true
+			}
+		} else {
+			// Check all segments
+			for i := 0; i < totalSegments; i++ {
+				selectedIndices[i] = true
+			}
+		}
+
+		slog.InfoContext(ctx, fmt.Sprintf("Checking %d of %d segments (%d%%)", segmentsToCheck, totalSegments, checkPercent))
+
 		bar := progressbar.NewOptions(int(file.Bytes),
 			progressbar.OptionSetWriter(ansi.NewAnsiStdout()), //you should install "github.com/k0kubun/go-ansi"
 			progressbar.OptionEnableColorCodes(true),
@@ -76,7 +104,11 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb) (err err
 			}))
 
 		// Process each segment
-		for _, segment := range file.Segments {
+		for segIdx, segment := range file.Segments {
+			// Skip segments that are not selected
+			if !selectedIndices[segIdx] {
+				continue
+			}
 			// Create local variables to avoid closure problems
 			fileInfo := file
 			seg := segment
