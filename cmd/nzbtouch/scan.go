@@ -88,6 +88,7 @@ The scanner will run at the configured interval and respect daily limits.`,
 			reprocessInterval,
 			cfg.Scanner.FailedDirectory,
 			cfg.Scanner.CheckPercent,
+			cfg.Scanner.MissingPercent,
 		)
 		if err != nil {
 			slog.Error("Failed to create directory scanner", "error", err)

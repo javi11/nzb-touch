@@ -23,6 +23,7 @@ type DirectoryScanner struct {
 	reprocessInterval time.Duration
 	failedDirectory   string
 	checkPercent      int
+	missingPercent    int
 	processingQueue   chan string
 	stopChan          chan struct{}
 }
@@ -38,6 +39,7 @@ func NewDirectoryScanner(
 	reprocessInterval time.Duration,
 	failedDirectory string,
 	checkPercent int,
+	missingPercent int,
 ) (*DirectoryScanner, error) {
 	if concurrentProcessing <= 0 {
 		concurrentProcessing = 1
@@ -58,6 +60,7 @@ func NewDirectoryScanner(
 		reprocessInterval: reprocessInterval,
 		failedDirectory:   failedDirectory,
 		checkPercent:      checkPercent,
+		missingPercent:    missingPercent,
 		processingQueue:   make(chan string, concurrentProcessing),
 		stopChan:          make(chan struct{}),
 	}, nil
@@ -359,5 +362,5 @@ func (s *DirectoryScanner) processFile(ctx context.Context, filePath string) err
 	nzbData.PrintInfo()
 
 	// Process the NZB file
-	return s.processor.ProcessNZB(ctx, nzbData.Nzb, s.checkPercent)
+	return s.processor.ProcessNZB(ctx, nzbData.Nzb, s.checkPercent, s.missingPercent)
 }

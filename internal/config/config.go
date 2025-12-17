@@ -40,6 +40,7 @@ type Scanner struct {
 	ReprocessInterval time.Duration `yaml:"reprocess_interval"` // Duration after which to reprocess an item ("0" to disable)
 	FailedDirectory   string        `yaml:"failed_directory"`   // Directory where failed NZBs are moved to
 	CheckPercent      int           `yaml:"check_percent"`      // Percentage of NZB to download for checking (1-100, default: 100)
+	MissingPercent    int           `yaml:"missing_percent"`    // Allowed percentage of missing articles (0-100, default: 0)
 }
 
 type Option func(*Config)
@@ -59,6 +60,7 @@ var (
 		ReprocessInterval: 0,                // Default: don't reprocess (0 = disabled)
 		FailedDirectory:   "",               // Default: no failed directory
 		CheckPercent:      100,              // Default: check 100% of the file
+		MissingPercent:    0,                // Default: no missing articles allowed
 	}
 )
 
@@ -76,6 +78,7 @@ func mergeWithDefault(config ...Config) Config {
 				ReprocessInterval: scannerDefault.ReprocessInterval,
 				FailedDirectory:   scannerDefault.FailedDirectory,
 				CheckPercent:      scannerDefault.CheckPercent,
+				MissingPercent:    scannerDefault.MissingPercent,
 			},
 		}
 	}
@@ -123,6 +126,10 @@ func mergeWithDefault(config ...Config) Config {
 
 	if cfg.Scanner.CheckPercent == 0 {
 		cfg.Scanner.CheckPercent = scannerDefault.CheckPercent
+	}
+
+	if cfg.Scanner.MissingPercent < 0 || cfg.Scanner.MissingPercent > 100 {
+		cfg.Scanner.MissingPercent = scannerDefault.MissingPercent
 	}
 
 	return cfg
