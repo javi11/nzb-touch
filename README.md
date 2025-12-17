@@ -56,6 +56,7 @@ scanner:
   concurrent_jobs: 3 # Number of concurrent processing jobs
   database_path: "queue.db" # SQLite database for persistent queue storage
   reprocess_interval: "7d" # Reprocess items after 7 days (set to "0" to disable)
+  check_percent: 100 # Percentage how many articles should be downloaded
 ```
 
 ### Scanner Configuration
