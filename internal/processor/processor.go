@@ -78,7 +78,7 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb, checkPer
 	// Calculate allowed missing segments based on TOTAL segments in NZB
 	allowedMissingSegments := (totalSegmentsInNZB * missingPercent) / 100
 
-	slog.InfoContext(ctx, "Total allowed missing segments: ", allowedMissingSegments)
+	slog.InfoContext(ctx, "Total allowed missing segments", "allowedMissingSegments", allowedMissingSegments)
 
 	// Track failed segments across entire NZB
 	var failedSegments int
