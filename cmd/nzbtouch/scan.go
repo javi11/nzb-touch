@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/javi11/nntppool"
+	"github.com/javi11/nntppool/v2"
 	"github.com/javi11/nzb-touch/internal/config"
 	"github.com/javi11/nzb-touch/internal/processor"
 	"github.com/spf13/cobra"
