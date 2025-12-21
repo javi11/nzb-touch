@@ -43,7 +43,7 @@ download_providers:
     port: 563
     username: "your_username"
     password: "your_password"
-    ssl: true
+    tls: true
     max_connections: 10
 
 # Scanner configuration for directory watching
@@ -55,7 +55,7 @@ scanner:
   max_files_per_day: 100 # Maximum number of files to process per day
   concurrent_jobs: 3 # Number of concurrent processing jobs
   database_path: "queue.db" # SQLite database for persistent queue storage
-  reprocess_interval: "7d" # Reprocess items after 7 days (set to "0" to disable)
+  reprocess_interval: "168h" # Reprocess items after 7 days (set to "0" to disable)
   check_percent: 100 # Percentage how many articles should be downloaded
   missing_percent: 0 # How many percent of the articels can fail
 ```
