@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	nzbFile      string
-	configFile   string
-	checkPercent int
+	nzbFile        string
+	configFile     string
+	checkPercent   int
+	missingPercent int
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -40,6 +41,12 @@ validate NZB files without storing the downloaded content.`,
 
 		if checkPercent <= 0 || checkPercent > 100 {
 			slog.Error("Error: checkpercent must be between 1 and 100")
+			_ = cmd.Help()
+			os.Exit(1)
+		}
+
+		if missingPercent < 0 || missingPercent > 100 {
+			slog.Error("Error: missingpercent must be between 0 and 100")
 			_ = cmd.Help()
 			os.Exit(1)
 		}
@@ -76,7 +83,7 @@ validate NZB files without storing the downloaded content.`,
 
 		// Start download
 		ctx := context.Background()
-		if err := proc.ProcessNZB(ctx, nzbData.Nzb, checkPercent); err != nil {
+		if err := proc.ProcessNZB(ctx, nzbData.Nzb, checkPercent, missingPercent); err != nil {
 			slog.Error("Error processing NZB", "error", err)
 			os.Exit(5)
 		}
@@ -87,6 +94,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&nzbFile, "nzb", "n", "", "Path to NZB file (required)")
 	rootCmd.Flags().StringVarP(&configFile, "config", "c", "", "Path to YAML config file (required)")
 	rootCmd.Flags().IntVarP(&checkPercent, "checkpercent", "p", 100, "Percentage of NZB to download for checking (100 for full download)")
+	rootCmd.Flags().IntVarP(&missingPercent, "missingpercent", "m", 0, "Allowed percentage of missing articles before considering the NZB invalid (0 for none)")
 
 	_ = rootCmd.MarkFlagRequired("nzb")
 	_ = rootCmd.MarkFlagRequired("config")
