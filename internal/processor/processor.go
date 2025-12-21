@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/Tensai75/nzbparser"
-	"github.com/javi11/nntppool"
+	"github.com/javi11/nntppool/v2"
 	"github.com/k0kubun/go-ansi"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sourcegraph/conc/pool"
