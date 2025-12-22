@@ -76,7 +76,7 @@ validate NZB files without storing the downloaded content.`,
 			slog.Error("Error creating connection pool", "error", err)
 			os.Exit(4)
 		}
-		defer pool.Quit()
+		// Explicitly call Quit after processing to ensure pool shutdown completes
 
 		// Create processor with configured download workers
 		proc := processor.New(pool, nzbData.TotalSegments, cfg.DownloadWorkers)
@@ -85,8 +85,13 @@ validate NZB files without storing the downloaded content.`,
 		ctx := context.Background()
 		if err := proc.ProcessNZB(ctx, nzbData.Nzb, checkPercent, missingPercent); err != nil {
 			slog.Error("Error processing NZB", "error", err)
+			// Ensure pool is closed before exiting
+			pool.Quit()
 			os.Exit(5)
 		}
+
+		// ensure clean shutdown of connection pool
+		pool.Quit()
 	},
 }
 
