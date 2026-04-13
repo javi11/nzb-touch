@@ -46,9 +46,11 @@ type Scanner struct {
 type Option func(*Config)
 
 var (
-	providerConfigDefault = nntppool.Provider{
-		MaxConnections:                 10,
+	providerConfigDefault = nntppool.UsenetProviderConfig{
+		MaxConnections:                 20,
 		MaxConnectionIdleTimeInSeconds: 2400,
+		MaxConnectionTTLInSeconds:      2400,
+		PipelineDepth:                  20,
 	}
 	downloadWorkersDefault = 10
 	scannerDefault         = Scanner{
@@ -93,6 +95,14 @@ func mergeWithDefault(config ...Config) Config {
 
 		if p.MaxConnectionIdleTimeInSeconds == 0 {
 			p.MaxConnectionIdleTimeInSeconds = providerConfigDefault.MaxConnectionIdleTimeInSeconds
+		}
+
+		if p.MaxConnectionTTLInSeconds == 0 {
+			p.MaxConnectionTTLInSeconds = providerConfigDefault.MaxConnectionTTLInSeconds
+		}
+
+		if p.PipelineDepth == 0 {
+			p.PipelineDepth = providerConfigDefault.PipelineDepth
 		}
 
 		cfg.DownloadProviders[i] = p

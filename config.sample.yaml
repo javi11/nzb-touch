@@ -7,16 +7,26 @@ download_providers:
     username: 'your_username'
     password: 'your_password'
     tls: true
-    max_connections: 10
+    insecure_ssl: false                     # Skip TLS certificate verification
+    max_connections: 20
     max_connection_idle_time_in_seconds: 2400
+    max_connection_ttl_in_seconds: 2400     # Max connection lifetime (seconds)
+    pipeline_depth: 20                      # BODY commands to pipeline (0=disabled, 20=recommended for high-latency)
+    is_backup_provider: false               # Use only when primary providers are exhausted
+    proxy_url: ''                           # Optional SOCKS5 proxy (e.g. socks5://user:pass@host:port)
 
   - host: 'news2.example.com'
     port: 119
     username: 'another_username'
     password: 'another_password'
     tls: false
-    max_connections: 10
+    insecure_ssl: false
+    max_connections: 20
     max_connection_idle_time_in_seconds: 2400
+    max_connection_ttl_in_seconds: 2400
+    pipeline_depth: 20
+    is_backup_provider: true                # This provider is used as backup
+    proxy_url: ''
 
 # Scanner configuration for directory watching
 scanner:

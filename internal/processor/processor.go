@@ -46,7 +46,7 @@ func New(nntpClient nntppool.UsenetConnectionPool, totalSegments int, concurrenc
 
 // ProcessNZB downloads all articles in the NZB file
 func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb, checkPercent int, missingPercent int) (err error) {
-	// Create a new worker pool with the configured concurrency
+	// Create a new worker pool with the configured concurrency (one task per file)
 	workerPool := pool.New().WithMaxGoroutines(p.concurrency).WithContext(ctx).WithCancelOnError()
 	defer func() {
 		err = workerPool.Wait()
@@ -84,7 +84,7 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb, checkPer
 	var failedSegments int
 	var mu sync.Mutex
 
-	// Process each file
+	// Process each file as a batch using pipelining
 	for _, file := range nzb.Files {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -105,13 +105,11 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb, checkPer
 		// Select random segment indices without duplicates
 		selectedIndices := make(map[int]bool)
 		if segmentsToCheck < totalSegments {
-			// Generate random indices without duplicates
 			for len(selectedIndices) < segmentsToCheck {
 				idx := rand.Intn(totalSegments)
 				selectedIndices[idx] = true
 			}
 		} else {
-			// Check all segments
 			for i := 0; i < totalSegments; i++ {
 				selectedIndices[i] = true
 			}
@@ -120,7 +118,7 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb, checkPer
 		slog.InfoContext(ctx, fmt.Sprintf("Checking %d of %d segments (%d%%)", segmentsToCheck, totalSegments, checkPercent))
 
 		bar := progressbar.NewOptions(int(file.Bytes),
-			progressbar.OptionSetWriter(ansi.NewAnsiStdout()), //you should install "github.com/k0kubun/go-ansi"
+			progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
 			progressbar.OptionEnableColorCodes(true),
 			progressbar.OptionSetWidth(15),
 			progressbar.OptionShowBytes(true),
@@ -133,47 +131,56 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb, checkPer
 				BarEnd:        "]",
 			}))
 
-		// Process each segment
+		// Build batch request from selected segments
+		requests := make([]nntppool.BodyBatchRequest, 0, len(selectedIndices))
 		for segIdx, segment := range file.Segments {
-			// Skip segments that are not selected
 			if !selectedIndices[segIdx] {
 				continue
 			}
+			requests = append(requests, nntppool.BodyBatchRequest{
+				MessageID: segment.Id,
+				Writer:    io.Discard,
+			})
+		}
 
-			// Create local variables to avoid closure problems
-			fileInfo := file
-			seg := segment
+		// Use the primary group for this file
+		group := ""
+		if len(file.Groups) > 0 {
+			group = file.Groups[0]
+		}
 
-			// Submit task to worker pool
-			workerPool.Go(func(ctx context.Context) error {
-				// Process segment
-				bytesDownloaded, err := p.nntpClient.Body(ctx, seg.Id, io.Discard, fileInfo.Groups)
-				if err != nil {
-					if errors.Is(err, context.Canceled) {
+		// Capture loop variables for closure
+		fileInfo := file
+
+		workerPool.Go(func(ctx context.Context) error {
+			// Download all selected segments for this file as a pipeline batch
+			results := p.nntpClient.BodyBatch(ctx, group, requests)
+
+			for _, result := range results {
+				if result.Error != nil {
+					if errors.Is(result.Error, context.Canceled) {
 						return nil
 					}
 
-					// Increment failed count (thread-safe)
 					mu.Lock()
 					failedSegments++
 					currentFailed := failedSegments
 					mu.Unlock()
 
-					// Check if we've exceeded the allowed missing segments
 					if currentFailed > allowedMissingSegments {
 						slog.ErrorContext(ctx, "Too many failed segments",
-							"segment", seg.Id,
+							"segment", result.MessageID,
 							"file", fileInfo.Filename,
 							"failed", currentFailed,
 							"total_in_nzb", totalSegmentsInNZB,
 							"allowed_missing", allowedMissingSegments,
 							"missing_percent", missingPercent,
-							"error", err)
+							"error", result.Error)
 
 						cancel()
 
 						return &SegmentError{
-							SegmentID: seg.Id,
+							SegmentID: result.MessageID,
 							Err: fmt.Errorf("exceeded allowed missing segments: %d/%d total (%.1f%% > %d%%)",
 								currentFailed, totalSegmentsInNZB,
 								float64(currentFailed)*100/float64(totalSegmentsInNZB),
@@ -181,22 +188,26 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb, checkPer
 						}
 					}
 
-					// Log warning but continue
 					slog.WarnContext(ctx, "Segment download failed",
-						"segment", seg.Id,
+						"segment", result.MessageID,
 						"file", fileInfo.Filename,
 						"failed_count", currentFailed,
-						"error", err)
+						"error", result.Error)
 				} else {
-					// Update statistics
-					_ = bar.Add(int(bytesDownloaded))
+					_ = bar.Add(int(result.BytesWritten))
 				}
-				return nil
-			})
-		}
+			}
 
-		slog.InfoContext(ctx, fmt.Sprintf("File %s checked", file.Filename))
-		_ = bar.Finish()
+			slog.InfoContext(ctx, fmt.Sprintf("File %s checked", fileInfo.Filename))
+			_ = bar.Finish()
+
+			return nil
+		})
+	}
+
+	// Wait for all file workers to finish
+	if waitErr := workerPool.Wait(); waitErr != nil {
+		return waitErr
 	}
 
 	// Final summary
@@ -216,10 +227,35 @@ func (p *Processor) ProcessNZB(ctx context.Context, nzb *nzbparser.Nzb, checkPer
 		"failure_rate", fmt.Sprintf("%.1f%%", failureRate),
 		"allowed_missing_percent", missingPercent)
 
+	// Print per-provider metrics
+	snapshot := p.nntpClient.GetMetricsSnapshot()
+	printMetricsSnapshot(snapshot)
+
 	if finalFailed > allowedMissingSegments {
 		return fmt.Errorf("NZB check failed: %d/%d total segments failed (%.1f%% > %d%%)",
 			finalFailed, totalSegmentsInNZB, failureRate, missingPercent)
 	}
 
 	return nil
+}
+
+// printMetricsSnapshot prints a summary of pool metrics to the log.
+func printMetricsSnapshot(snap nntppool.PoolMetricsSnapshot) {
+	slog.Info("=== Pool metrics ===",
+		"articles_downloaded", snap.ArticlesDownloaded,
+		"bytes_downloaded", snap.BytesDownloaded,
+		"total_errors", snap.TotalErrors,
+	)
+
+	for host, pm := range snap.ProviderMetrics {
+		slog.Info("Provider stats",
+			"host", host,
+			"state", pm.State,
+			"active_connections", pm.ActiveConnections,
+			"max_connections", pm.MaxConnections,
+			"articles_downloaded", pm.ArticlesDownloaded,
+			"bytes_downloaded", pm.BytesDownloaded,
+			"errors", pm.TotalErrors,
+		)
+	}
 }
