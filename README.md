@@ -106,7 +106,7 @@ The application uses different exit codes to indicate specific error conditions:
 1. Clone this repository:
 
 ```bash
-git clone https://github.com/javi11/nzb-touch.git
+git clone https://github.com/kipsilabs/nzb-touch.git
 cd nzb-touch
 ```
 
