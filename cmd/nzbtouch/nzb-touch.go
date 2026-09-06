@@ -6,9 +6,9 @@ import (
 	"os"
 
 	"github.com/javi11/nntppool/v2"
-	"github.com/javi11/nzb-touch/internal/config"
-	"github.com/javi11/nzb-touch/internal/nzb"
-	"github.com/javi11/nzb-touch/internal/processor"
+	"github.com/kipsilabs/nzb-touch/internal/config"
+	"github.com/kipsilabs/nzb-touch/internal/nzb"
+	"github.com/kipsilabs/nzb-touch/internal/processor"
 	"github.com/spf13/cobra"
 )
 

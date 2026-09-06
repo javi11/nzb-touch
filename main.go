@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/javi11/nzb-touch/cmd/nzbtouch"
+	"github.com/kipsilabs/nzb-touch/cmd/nzbtouch"
 )
 
 func main() {
