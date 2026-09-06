@@ -1,4 +1,4 @@
-module github.com/javi11/nzb-touch
+module github.com/kipsilabs/nzb-touch
 
 go 1.25.1
 

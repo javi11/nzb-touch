@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/javi11/nzb-touch/internal/nzb"
+	"github.com/kipsilabs/nzb-touch/internal/nzb"
 	"github.com/opencontainers/selinux/pkg/pwalkdir"
 )
 
